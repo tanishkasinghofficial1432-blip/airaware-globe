@@ -5,6 +5,8 @@ import json
 import plotly.graph_objects as go
 from datetime import datetime
 
+import requests
+
 # ============================================================
 # AIR AWARE — INTERACTIVE AIR QUALITY GLOBE
 # ============================================================
