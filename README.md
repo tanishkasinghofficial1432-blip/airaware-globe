@@ -5,6 +5,8 @@
 🔗 Live Application Dashboard
 https://airaware-globe-3cnefqsgmae7gotkcmubhu.streamlit.app/
 
+# Social Media Post: https://lnkd.in/p/dfYwPTh3
+
 🚨 The Core Problem
 Official air quality monitoring networks (such as India's CPCB network) rely on sparse, expensive static reference stations. Because ambient air pollution fluctuates block-by-block due to road traffic and localized construction dust, these static grids leave massive urban blind spots where citizens live, work, and commute.
 
