@@ -730,10 +730,10 @@ elif page == "🐟  TinyFish Pipeline":
     )
 
     st.info(
-        "Integration status: TinyFish is not connected yet. "
-        "The current dashboard uses simulated demonstration readings. "
-        "This page describes the proposed integration."
-    )
+    "TinyFish web search is available in the Live Air Quality "
+    "Intelligence section. The station readings remain simulated. "
+    "The ML module below uses synthetic training data."
+)
 
     col1, col2, col3 = st.columns(3, gap="medium")
 
@@ -821,6 +821,118 @@ Interactive AirAware map
     - Keep actual measurements separate from model predictions.
     - Validate models before claiming prediction accuracy.
     """)
+    
+    # ---------------- EXPERIMENTAL ML MODULE ----------------
+
+    st.markdown("---")
+    st.markdown("### 🧠 Experimental ML Pollution Estimation")
+    st.info(
+        "This Random Forest demo is trained on synthetic data. "
+        "Its outputs are experimental estimates, not real AQI "
+        "measurements or validated forecasts."
+    )
+
+    ml_col1, ml_col2 = st.columns(2)
+
+    with ml_col1:
+        traffic_input = st.slider(
+            "Traffic congestion factor",
+            min_value=1.0,
+            max_value=5.0,
+            value=2.5,
+            step=0.1,
+            key="ml_traffic"
+        )
+
+    with ml_col2:
+        industry_input = st.slider(
+            "Industrial activity factor",
+            min_value=1.0,
+            max_value=5.0,
+            value=2.0,
+            step=0.1,
+            key="ml_industry"
+        )
+
+    # Reproducible synthetic training data
+    rng = np.random.default_rng(42)
+
+    train_traffic = rng.uniform(1.0, 5.0, 200)
+    train_industry = rng.uniform(1.0, 5.0, 200)
+
+    train_targets = (
+        120
+        + 12 * train_traffic
+        + 15 * train_industry
+        + rng.normal(0, 5, 200)
+    )
+
+    X_train_ml = pd.DataFrame({
+        "traffic_density": train_traffic,
+        "industrial_proximity": train_industry
+    })
+
+    ml_model = RandomForestRegressor(
+        n_estimators=100,
+        random_state=42
+    )
+
+    ml_model.fit(X_train_ml, train_targets)
+
+    # Predict a small synthetic grid using the selected inputs
+    grid_rng = np.random.default_rng(7)
+    grid_size = 25
+
+    grid_traffic = np.clip(
+        traffic_input + grid_rng.uniform(-0.5, 0.5, grid_size),
+        1.0, 5.0
+    )
+
+    grid_industry = np.clip(
+        industry_input + grid_rng.uniform(-0.5, 0.5, grid_size),
+        1.0, 5.0
+    )
+
+    X_grid_ml = pd.DataFrame({
+        "traffic_density": grid_traffic,
+        "industrial_proximity": grid_industry
+    })
+
+    predictions = ml_model.predict(X_grid_ml)
+
+    prediction_df = pd.DataFrame({
+        "Grid Point": [
+            f"Grid {i + 1}" for i in range(grid_size)
+        ],
+        "Traffic Factor": grid_traffic.round(2),
+        "Industry Factor": grid_industry.round(2),
+        "Experimental Estimate": predictions.round(1)
+    })
+
+    metric1, metric2 = st.columns(2)
+
+    metric1.metric(
+        "Mean experimental estimate",
+        f"{predictions.mean():.1f}"
+    )
+
+    metric2.metric(
+        "Highest grid estimate",
+        f"{predictions.max():.1f}"
+    )
+
+    st.markdown("#### Grid prediction results")
+    st.dataframe(
+        prediction_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        "Model: RandomForestRegressor · 200 synthetic training "
+        "samples · 25 experimental predictions. "
+        "These values are not official AQI readings."
+    )
 
     st.caption(
         "Kritikal Hacks × TinyFish | AirAware Research Prototype"
