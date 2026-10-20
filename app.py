@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import json
 import plotly.graph_objects as go
 from datetime import datetime
 
@@ -58,6 +59,28 @@ section[data-testid="stSidebar"] * {
 
 .brand span {
     color: #43E6B0;
+}
+.partner-credit {
+    color: #F3A45D;
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    margin-top: 8px;
+    font-weight: 600;
+}
+
+.tinyfish-card {
+    background: linear-gradient(135deg, #17131F, #0C1423);
+    border: 1px solid #3A2B30;
+    border-radius: 13px;
+    padding: 16px 18px;
+    margin: 10px 0;
+}
+
+.tinyfish-step {
+    color: #F3A45D;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
 }
 
 .sub-brand {
@@ -208,6 +231,36 @@ def get_aqi_status(value):
     elif value <= 300:
         return "Very unhealthy", "#C084FC"
     return "Hazardous", "#FF4D4D"
+@st.cache_data
+def load_india_boundaries():
+    with open("india_state.geojson", "r", encoding="utf-8") as file:
+        geojson = json.load(file)
+
+    lons = []
+    lats = []
+
+    for feature in geojson["features"]:
+        geometry = feature["geometry"]
+        geom_type = geometry["type"]
+        coordinates = geometry["coordinates"]
+
+        if geom_type == "Polygon":
+            polygons = [coordinates]
+        elif geom_type == "MultiPolygon":
+            polygons = coordinates
+        else:
+            continue
+
+        for polygon in polygons:
+            for ring in polygon:
+                for lon, lat in ring:
+                    lons.append(lon)
+                    lats.append(lat)
+
+                lons.append(None)
+                lats.append(None)
+
+    return lons, lats
 
 
 def make_globe(data, pollutant, show_stations, show_labels):
@@ -216,29 +269,42 @@ def make_globe(data, pollutant, show_stations, show_labels):
 
     fig = go.Figure()
 
-    # Station markers on a 3D-style globe.
-    # Marker color represents the selected pollutant's
-    # concentration band, NOT an official AQI calculation.
+    # Load and draw real Indian state boundaries
+    boundary_lons, boundary_lats = load_india_boundaries()
 
+    fig.add_trace(go.Scattergeo(
+        lon=boundary_lons,
+        lat=boundary_lats,
+        mode="lines",
+        line=dict(color="#43E6B0", width=1.1),
+        hoverinfo="skip",
+        showlegend=False,
+        name="State boundaries"
+    ))
+
+    
     fig.add_trace(go.Scattergeo(
         lon=data["Longitude"],
         lat=data["Latitude"],
         mode="markers+text" if show_labels else "markers",
         text=data["Station"] if show_labels else None,
         textposition="top center",
-        textfont=dict(size=9, color="#C7D5EA"),
+        textfont=dict(size=10, color="#DCE5F5"),
+
         customdata=np.column_stack([
             data["Station"],
             data[pollutant],
             data["Latitude"],
             data["Longitude"]
         ]),
+
         marker=dict(
             size=np.clip(values / 7, 8, 23) if show_stations else 0,
             color=colors,
             opacity=0.95,
-            line=dict(color="#E8F1FF", width=0.7)
+            line=dict(color="#E8F1FF", width=0.8)
         ),
+
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             + pollutant + ": %{customdata[1]} µg/m³<br>"
@@ -246,44 +312,81 @@ def make_globe(data, pollutant, show_stations, show_labels):
             "Longitude: %{customdata[3]:.4f}"
             "<extra></extra>"
         ),
+
+        hoverlabel=dict(
+            bgcolor="#111B2D",
+            bordercolor="#43E6B0",
+            font=dict(
+                family="Inter",
+                size=13,
+                color="#F3F7FF"
+            ),
+            align="left"
+        ),
+
         name="Monitoring stations"
     ))
 
+    # Focus the map on India instead of the whole world
     fig.update_geos(
-        projection_type="orthographic",
-        projection_rotation=dict(lon=78, lat=23, roll=0),
+        projection_type="mercator",
+        center=dict(lat=22.5, lon=82.0),
+
+        lonaxis=dict(
+            range=[67, 99],
+            showgrid=True,
+            gridcolor="#203149",
+            gridwidth=0.5
+        ),
+
+        lataxis=dict(
+            range=[5, 38],
+            showgrid=True,
+            gridcolor="#203149",
+            gridwidth=0.5
+        ),
+
         showland=True,
         landcolor="#172638",
+
         showocean=True,
         oceancolor="#071426",
+
         showlakes=True,
         lakecolor="#0B1C30",
+
         showcoastlines=True,
-        coastlinecolor="#30475E",
-        coastlinewidth=0.6,
+        coastlinecolor="#43E6B0",
+        coastlinewidth=0.8,
+
         showcountries=True,
-        countrycolor="#30475E",
-        countrywidth=0.6,
+        countrycolor="#50647D",
+        countrywidth=0.8,
+
         showframe=False,
-        bgcolor="#090F1B",
-        lataxis_showgrid=True,
-        lonaxis_showgrid=True,
-        lataxis_gridcolor="#1B3047",
-        lonaxis_gridcolor="#1B3047",
-        lataxis_gridwidth=0.5,
-        lonaxis_gridwidth=0.5
+        bgcolor="#090F1B"
     )
 
     fig.update_layout(
         height=545,
         margin=dict(l=0, r=0, t=5, b=0),
+
         paper_bgcolor="#090F1B",
         plot_bgcolor="#090F1B",
-        font=dict(family="Inter", color="#DCE5F5"),
-        showlegend=False
+
+        font=dict(
+            family="Inter",
+            color="#DCE5F5"
+        ),
+
+        showlegend=False,
+
+        hovermode="closest",
+        transition=dict(duration=250)
     )
 
     return fig
+
 
 
 # ----------------------- SIDEBAR ---------------------------
@@ -293,6 +396,9 @@ with st.sidebar:
     <div style="padding: 8px 0 18px 0;">
         <div class="brand">AIR<span>AWARE</span></div>
         <div class="sub-brand">ATMOSPHERIC INTELLIGENCE</div>
+        <div class="partner-credit">
+    POWERED BY RESEARCH · TINYFISH × KRITIKAL HACKS
+</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -300,7 +406,12 @@ with st.sidebar:
 
     page = st.radio(
         "NAVIGATION",
-        ["🌍  Globe Explorer", "📊  Air Quality Data", "ℹ️  About AirAware"],
+        [
+    "🇮🇳  India Air Map",
+    "📊  Air Quality Data",
+    "🐟  TinyFish Pipeline",
+    "ℹ️  About AirAware"
+],
         label_visibility="visible"
     )
 
@@ -438,7 +549,7 @@ st.write("")
 
 # ------------------------ MAIN PAGE ------------------------
 
-if page == "🌍  Globe Explorer":
+if page == "🇮🇳  India Air Map" :
 
     left, right = st.columns([1.8, 1], gap="medium")
 
@@ -605,6 +716,111 @@ elif page == "📊  Air Quality Data":
     st.info(
         "This is demonstration data. Replace it with verified monitoring "
         "station observations before using it for research conclusions."
+    )
+elif page == "🐟  TinyFish Pipeline":
+
+    st.markdown("### 🐟 TinyFish-powered data acquisition")
+
+    st.markdown(
+        "A proposed data-acquisition workflow for AirAware, "
+        "prepared for **Kritikal Hacks × TinyFish**."
+    )
+
+    st.info(
+        "Integration status: TinyFish is not connected yet. "
+        "The current dashboard uses simulated demonstration readings. "
+        "This page describes the proposed integration."
+    )
+
+    col1, col2, col3 = st.columns(3, gap="medium")
+
+    with col1:
+        st.markdown("""
+        <div class="tinyfish-card">
+            <div class="tinyfish-step">01 · SOURCES</div>
+            <h4>Sources + TinyFish</h4>
+            <p>
+                Identify supported CPCB/DPCC portals, OpenAQ data
+                and public updates. Prefer official APIs whenever
+                available.
+            </p>
+            <p>
+                <b>Record:</b> source URL, retrieval time,
+                station location and observation timestamp.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="tinyfish-card">
+            <div class="tinyfish-step">02 · QUALITY CHECKS</div>
+            <h4>Verify + process</h4>
+            <p>
+                Check pollutant names, units, timestamps and
+                coordinates. Detect duplicates and missing values.
+            </p>
+            <p>
+                <b>Output:</b> a cleaned, standardised dataset
+                with traceable sources.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div class="tinyfish-card">
+            <div class="tinyfish-step">03 · ESTIMATE + MAP</div>
+            <h4>Predict + map</h4>
+            <p>
+                The planned modelling pipeline can combine verified
+                observations with suitable weather and geographic
+                data to estimate pollution at finer locations.
+            </p>
+            <p>
+                <b>Required:</b> validation, clear measured versus
+                predicted labels, data freshness and uncertainty.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("#### Proposed acquisition-to-map workflow")
+
+    st.code("""
+Supported data sources / official APIs
+                |
+                v
+TinyFish-assisted retrieval (where supported)
+                |
+                v
+Source URLs + timestamps + station metadata
+                |
+                v
+Data validation and cleaning
+                |
+                v
+Verified observations + suitable context data
+                |
+                v
+IDW baseline -> ML comparison -> spatial validation
+                |
+                v
+Interactive AirAware map
+    """, language="text")
+
+    st.markdown("#### Implementation principles")
+
+    st.markdown("""
+    - Prefer official APIs and documented data sources.
+    - Use TinyFish only for supported retrieval workflows.
+    - Preserve source URLs, timestamps, coordinates and units.
+    - Flag missing or suspicious data instead of silently inventing values.
+    - Keep actual measurements separate from model predictions.
+    - Validate models before claiming prediction accuracy.
+    """)
+
+    st.caption(
+        "Kritikal Hacks × TinyFish | AirAware Research Prototype"
     )
 
 
