@@ -874,6 +874,76 @@ Monitoring Stations / Open Datasets
         "fetch live data or calculate an IDW/ML pollution surface."
     )
 
+# ---------------- TINYFISH LIVE WEB INTELLIGENCE ----------------
+
+st.markdown("### 🌐 Live Air Quality Intelligence")
+st.caption(
+    "Search the web for recent air-quality reports. "
+    "These reports are separate from the simulated station readings."
+)
+
+city = st.text_input(
+    "Enter an Indian city",
+    value="Delhi",
+    key="tinyfish_city"
+)
+
+if st.button("Search latest air-quality reports", key="tinyfish_search"):
+    api_key = st.secrets.get("TINYFISH_API_KEY", "")
+
+    if not api_key:
+        st.error(
+            "TinyFish API key not found. Add TINYFISH_API_KEY "
+            "in Streamlit App Settings → Secrets."
+        )
+    elif not city.strip():
+        st.warning("Please enter a city name.")
+    else:
+        try:
+            with st.spinner("Searching current web sources..."):
+                response = requests.get(
+                    "https://api.search.tinyfish.ai/",
+                    params={
+                        "query": (
+                            f"latest air quality pollution AQI report "
+                            f"{city.strip()} India"
+                        ),
+                        "location": "IN",
+                        "language": "en",
+                    },
+                    headers={"X-API-Key": api_key},
+                    timeout=20,
+                )
+                response.raise_for_status()
+                search_data = response.json()
+
+            results = search_data.get("results", [])
+
+            if results:
+                st.success(f"Found {len(results)} search results.")
+
+                for result in results:
+                    title = result.get("title", "Untitled source")
+                    url = result.get("url", "")
+                    snippet = result.get("snippet", "")
+
+                    st.markdown(f"**{title}**")
+                    if snippet:
+                        st.write(snippet)
+                    if url.startswith(("https://", "http://")):
+                        st.markdown(f"[Open original source]({url})")
+                    st.divider()
+            else:
+                st.info("No results returned. Try another city or query.")
+
+        except requests.exceptions.Timeout:
+            st.error("The search timed out. Please try again.")
+        except requests.exceptions.RequestException as error:
+            st.error(f"TinyFish request failed: {error}")
+        except ValueError:
+            st.error("TinyFish returned an unexpected response format.")
+    
+
 
 # ------------------------ FOOTER ----------------------------
 
